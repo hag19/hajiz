@@ -1,0 +1,17 @@
+[filesystem]
+mode = "whitelist"
+mounts = [
+  { path = "/tmp", access = "rw" },
+  { path = "/usr", access = "ro" },
+  { path = "~/Documents", access = "rw" },
+]
+
+[syscalls]
+mode = "whitelist"
+allow_groups = ["io", "memory"]
+
+[network]
+mode = "none"
+
+[capabilities]
+allow = []

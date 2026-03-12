@@ -1,0 +1,23 @@
+[filesystem]
+mode = "whitelist"
+mounts = [
+  { path = "/tmp", access = "rw" },
+  { path = "/usr", access = "ro" },
+  { path = "/lib", access = "ro" },
+  { path = "~/.mozilla", access = "rw" },
+]
+
+[syscalls]
+mode = "whitelist"
+allow_groups = ["io", "memory", "threading", "network"]
+
+[network]
+mode = "full"
+
+[capabilities]
+allow = []
+
+[resources]
+max_memory = "2G"
+max_cpu = "75%"
+max_procs = 100
