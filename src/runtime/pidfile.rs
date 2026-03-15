@@ -3,13 +3,13 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::error::HagboxError;
+use crate::error::HajizError;
 
 /// Directory where pid-files are stored.
-const PIDFILE_DIR: &str = "/tmp/hagbox";
+const PIDFILE_DIR: &str = "/tmp/hajiz";
 
 /// Write a named pidfile so the sandbox can be found later by name.
-pub fn write(name: &str, pid: u32) -> Result<PathBuf, HagboxError> {
+pub fn write(name: &str, pid: u32) -> Result<PathBuf, HajizError> {
     fs::create_dir_all(PIDFILE_DIR)?;
     let path = pidfile_path(name);
     fs::write(&path, pid.to_string())?;
@@ -17,13 +17,13 @@ pub fn write(name: &str, pid: u32) -> Result<PathBuf, HagboxError> {
 }
 
 /// Read a PID from a named pidfile.
-pub fn read(name: &str) -> Result<u32, HagboxError> {
+pub fn read(name: &str) -> Result<u32, HajizError> {
     let path = pidfile_path(name);
     let raw = fs::read_to_string(&path)
-        .map_err(|_| HagboxError::Config(format!("no running sandbox named '{name}'")))?;
+        .map_err(|_| HajizError::Config(format!("no running sandbox named '{name}'")))?;
     raw.trim()
         .parse::<u32>()
-        .map_err(|_| HagboxError::Config(format!("corrupt pidfile for '{name}'")))
+        .map_err(|_| HajizError::Config(format!("corrupt pidfile for '{name}'")))
 }
 
 /// Remove a named pidfile (best-effort, does not fail).

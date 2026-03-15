@@ -1,7 +1,7 @@
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum HagboxError {
+pub enum HajizError {
     #[error("configuration error: {0}")]
     Config(String),
 
