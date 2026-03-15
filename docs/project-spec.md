@@ -4,6 +4,82 @@
 
 ---
 
+## Current Repository Specification (Authoritative, March 2026)
+
+This section is the authoritative specification for the current `hajiz` repository state.
+The long text below is preserved for academic traceability of the original plan.
+
+### Confirmed Implemented Scope
+
+- Launcher CLI: `hajiz <binary> [args...]`
+- Runtime process supervision with signal-aware shutdown
+- Namespace setup: mount, IPC, UTS, optional network namespace via config
+- Capability hardening:
+  - `PR_SET_NO_NEW_PRIVS`
+  - clear ambient capabilities
+  - clear effective/permitted/inheritable capability sets
+  - optional bounding-set drop
+- Landlock path-based filesystem restrictions
+- Seccomp modes:
+  - allowlist mode
+  - hardening-deny mode (default)
+  - strict mode
+
+### Explicitly Not Implemented in Current Code
+
+- Profile system (TOML schema/parser/overlay logic)
+- Audit/trace/profile generation modules
+- Cgroups resource controls
+- Multi-command CLI (`run`, `kill`, `list`)
+
+### Module Status Map
+
+- Active public crate modules:
+  - `src/error.rs`
+  - `src/isolation/mod.rs`
+  - `src/runtime/mod.rs`
+- Active isolation modules:
+  - `src/isolation/namespaces.rs`
+  - `src/isolation/capabilities.rs`
+  - `src/isolation/filesystem.rs`
+  - `src/isolation/seccomp.rs`
+- Removed/de-scoped module families:
+  - `src/profile/*`
+  - `src/audit/*`
+  - `src/cli/*`
+  - `src/isolation/cgroups.rs`
+  - `src/isolation/network.rs`
+
+### Runtime Contract
+
+1. Parse command arguments from `src/main.rs`.
+2. Build default `IsolationConfig`.
+3. Spawn child process with pre-exec isolation setup.
+4. Apply isolation in this order:
+   - namespaces
+   - capabilities
+   - Landlock filesystem
+   - seccomp
+5. Monitor child, propagate status, and enforce signal-based termination handling.
+
+### Code References (Source of Truth)
+
+- `src/main.rs`
+- `src/lib.rs`
+- `src/runtime/process.rs`
+- `src/isolation/mod.rs`
+- `src/isolation/namespaces.rs`
+- `src/isolation/capabilities.rs`
+- `src/isolation/filesystem.rs`
+- `src/isolation/seccomp.rs`
+
+---
+
+## Archived Original Planning Specification
+
+The following sections are the original planning document and are kept for historical/academic context.
+They are not a guarantee of currently implemented features.
+
 ## 1. PROJECT OVERVIEW
 
 ### 1.1 Project Title

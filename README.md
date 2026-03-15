@@ -39,4 +39,4 @@ hajiz /usr/bin/id
 2. Build exploit-oriented validation tests against targeted bug classes
 3. Add kernel-version capability detection and behavior matrix tests
 
-See `README_extracted.md` for the full project specification.
+See `docs/project-spec.md` for the full project specification.
