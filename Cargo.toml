@@ -9,5 +9,6 @@ license = "MIT"
 thiserror = "1.0"
 nix     = { version = "0.29", features = ["signal", "process", "sched", "mount"] }
 libseccomp = "0.3"
+clap = { version = "4.6.0", features = ["derive"] }
 
 [dev-dependencies]
