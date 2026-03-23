@@ -1,6 +1,7 @@
 use clap::{CommandFactory, Parser};
 use hajiz::{
     isolation::{FilesystemRule, IsolationConfig},
+    kernel::KernelCapabilities,
     profile::load_profile,
     runtime::process::{SandboxProcess, SpawnOptions},
     telemetry::{SecurityEvent, TelemetryLogger},
@@ -11,6 +12,10 @@ use std::time::SystemTime;
 #[derive(Parser, Debug)]
 #[command(name = "hajiz", version, about, arg_required_else_help = true)]
 struct Cli {
+    /// Afficher les capacités du kernel et quitter
+    #[arg(long)]
+    kernel_info: bool,
+
     /// Charger un profil TOML
     #[arg(long, value_name = "FICHIER")]
     profile: Option<PathBuf>,
@@ -56,8 +61,8 @@ struct Cli {
     verbose: bool,
 
     /// Binaire à exécuter dans le sandbox
-    #[arg(required = true)]
-    binary: String,
+    #[arg(required = false)]
+    binary: Option<String>,
 
     /// Arguments à passer au binaire
     #[arg(trailing_var_arg = true)]
@@ -86,6 +91,24 @@ fn main() {
     }
 
     let cli = Cli::parse();
+
+    // Afficher les infos kernel et quitter
+    if cli.kernel_info {
+        match KernelCapabilities::detect() {
+            Some(caps) => println!("{}", caps.report()),
+            None => eprintln!("[hajiz] impossible de détecter la version kernel"),
+        }
+        std::process::exit(0);
+    }
+
+    // Vérifier qu'un binaire est fourni
+    let binary_str = match &cli.binary {
+        Some(b) => b.clone(),
+        None => {
+            eprintln!("[hajiz] erreur: un binaire est requis");
+            std::process::exit(2);
+        }
+    };
 
     // Initialisation du logger de télémétrie
     let logger = match &cli.log {
@@ -155,12 +178,12 @@ fn main() {
         eprintln!("[hajiz] hash politique: {}", policy_hash);
     }
 
-    let binary = PathBuf::from(&cli.binary);
+    let binary = PathBuf::from(&binary_str);
 
     // Événement démarrage sandbox
     logger.log(&SecurityEvent::SandboxStarted {
         pid: std::process::id(),
-        binary: cli.binary.clone(),
+        binary: binary_str.clone(),
         profile: profile_name,
         timestamp: SystemTime::now(),
     });
@@ -174,7 +197,6 @@ fn main() {
     .and_then(|sandbox| {
         let pid = sandbox.pid;
         sandbox.monitor().map(|status| {
-            // Événement fin sandbox
             logger.log(&SecurityEvent::SandboxExited {
                 pid,
                 exit_code: status.code().unwrap_or(-1),
