@@ -3,8 +3,10 @@ use hajiz::{
     isolation::{FilesystemRule, IsolationConfig},
     profile::load_profile,
     runtime::process::{SandboxProcess, SpawnOptions},
+    telemetry::{SecurityEvent, TelemetryLogger},
 };
 use std::path::PathBuf;
+use std::time::SystemTime;
 
 #[derive(Parser, Debug)]
 #[command(name = "hajiz", version, about, arg_required_else_help = true)]
@@ -12,6 +14,10 @@ struct Cli {
     /// Charger un profil TOML
     #[arg(long, value_name = "FICHIER")]
     profile: Option<PathBuf>,
+
+    /// Fichier de log pour la télémétrie
+    #[arg(long, value_name = "FICHIER")]
+    log: Option<PathBuf>,
 
     /// Autoriser l'accès réseau (désactivé par défaut)
     #[arg(long)]
@@ -81,6 +87,12 @@ fn main() {
 
     let cli = Cli::parse();
 
+    // Initialisation du logger de télémétrie
+    let logger = match &cli.log {
+        Some(path) => TelemetryLogger::with_file(path.clone(), cli.verbose),
+        None => TelemetryLogger::new(cli.verbose),
+    };
+
     // Construction de la config de base depuis les flags CLI
     let mut config = IsolationConfig {
         disable_network: !cli.allow_net,
@@ -93,18 +105,14 @@ fn main() {
         filesystem_rules: Vec::new(),
     };
 
-    // Appliquer le profil TOML si fourni (les flags CLI ont priorité)
-    if let Some(profile_path) = &cli.profile {
+    // Appliquer le profil TOML si fourni
+    let profile_name = if let Some(profile_path) = &cli.profile {
         match load_profile(profile_path) {
             Ok(profile) => {
-                if cli.verbose {
-                    eprintln!("[hajiz] profil chargé: {}", profile.name);
-                }
-                // Réseau : le profil s'applique seulement si --allow-net pas fourni
+                let name = profile.name.clone();
                 if !cli.allow_net {
                     config.disable_network = profile.network.disable;
                 }
-                // Filesystem : fusion profil + flags --fs
                 for path in &profile.filesystem.read_only {
                     config.filesystem_rules.push(FilesystemRule {
                         path: path.clone(),
@@ -117,16 +125,18 @@ fn main() {
                         read_only: false,
                     });
                 }
-                // Seccomp : fusion profil + flags CLI
                 config.seccomp_syscall_groups.extend(profile.seccomp.allow_groups);
                 config.seccomp_allow_syscalls.extend(profile.seccomp.allow_syscalls);
+                Some(name)
             }
             Err(e) => {
                 eprintln!("[hajiz] erreur chargement profil: {e}");
                 std::process::exit(2);
             }
         }
-    }
+    } else {
+        None
+    };
 
     // Ajouter les règles --fs après le profil
     for rule_str in &cli.fs_rules {
@@ -139,7 +149,21 @@ fn main() {
         }
     }
 
+    // Log hash de la politique
+    let policy_hash = TelemetryLogger::policy_hash(&config);
+    if cli.verbose {
+        eprintln!("[hajiz] hash politique: {}", policy_hash);
+    }
+
     let binary = PathBuf::from(&cli.binary);
+
+    // Événement démarrage sandbox
+    logger.log(&SecurityEvent::SandboxStarted {
+        pid: std::process::id(),
+        binary: cli.binary.clone(),
+        profile: profile_name,
+        timestamp: SystemTime::now(),
+    });
 
     let result = SandboxProcess::spawn(SpawnOptions {
         binary,
@@ -148,7 +172,14 @@ fn main() {
         isolation: config,
     })
     .and_then(|sandbox| {
+        let pid = sandbox.pid;
         sandbox.monitor().map(|status| {
+            // Événement fin sandbox
+            logger.log(&SecurityEvent::SandboxExited {
+                pid,
+                exit_code: status.code().unwrap_or(-1),
+                timestamp: SystemTime::now(),
+            });
             if !status.success() {
                 std::process::exit(status.code().unwrap_or(1));
             }
