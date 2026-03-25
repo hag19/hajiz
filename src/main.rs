@@ -12,59 +12,32 @@ use std::time::SystemTime;
 #[derive(Parser, Debug)]
 #[command(name = "hajiz", version, about, arg_required_else_help = true)]
 struct Cli {
-    /// Afficher les capacités du kernel et quitter
     #[arg(long)]
     kernel_info: bool,
-
-    /// Charger un profil TOML
     #[arg(long, value_name = "FICHIER")]
     profile: Option<PathBuf>,
-
-    /// Fichier de log pour la télémétrie
     #[arg(long, value_name = "FICHIER")]
     log: Option<PathBuf>,
-
-    /// Autoriser l'accès réseau (désactivé par défaut)
     #[arg(long)]
     allow_net: bool,
-
-    /// Conserver les capabilities (supprimées par défaut)
     #[arg(long)]
     keep_caps: bool,
-
-    /// Activer le mode seccomp strict
     #[arg(long)]
     strict_seccomp: bool,
-
-    /// Activer le mode allowlist seccomp
     #[arg(long)]
     seccomp_whitelist: bool,
-
-    /// Désactiver le filtre seccomp de durcissement
     #[arg(long)]
     no_hardening: bool,
-
-    /// Autoriser un groupe de syscalls
     #[arg(long = "allow-group", value_name = "GROUPE")]
     syscall_groups: Vec<String>,
-
-    /// Autoriser un syscall spécifique par nom
     #[arg(long = "allow-syscall", value_name = "SYSCALL")]
     allow_syscalls: Vec<String>,
-
-    /// Ajouter une règle filesystem: chemin:ro ou chemin:rw
     #[arg(long = "fs", value_name = "CHEMIN:MODE")]
     fs_rules: Vec<String>,
-
-    /// Mode verbeux
     #[arg(short, long)]
     verbose: bool,
-
-    /// Binaire à exécuter dans le sandbox
     #[arg(required = false)]
     binary: Option<String>,
-
-    /// Arguments à passer au binaire
     #[arg(trailing_var_arg = true)]
     args: Vec<String>,
 }
@@ -92,7 +65,6 @@ fn main() {
 
     let cli = Cli::parse();
 
-    // Afficher les infos kernel et quitter
     if cli.kernel_info {
         match KernelCapabilities::detect() {
             Some(caps) => println!("{}", caps.report()),
@@ -101,7 +73,6 @@ fn main() {
         std::process::exit(0);
     }
 
-    // Vérifier qu'un binaire est fourni
     let binary_str = match &cli.binary {
         Some(b) => b.clone(),
         None => {
@@ -110,13 +81,11 @@ fn main() {
         }
     };
 
-    // Initialisation du logger de télémétrie
     let logger = match &cli.log {
         Some(path) => TelemetryLogger::with_file(path.clone(), cli.verbose),
         None => TelemetryLogger::new(cli.verbose),
     };
 
-    // Construction de la config de base depuis les flags CLI
     let mut config = IsolationConfig {
         disable_network: !cli.allow_net,
         drop_all_capabilities: !cli.keep_caps,
@@ -128,7 +97,6 @@ fn main() {
         filesystem_rules: Vec::new(),
     };
 
-    // Appliquer le profil TOML si fourni
     let profile_name = if let Some(profile_path) = &cli.profile {
         match load_profile(profile_path) {
             Ok(profile) => {
@@ -137,16 +105,10 @@ fn main() {
                     config.disable_network = profile.network.disable;
                 }
                 for path in &profile.filesystem.read_only {
-                    config.filesystem_rules.push(FilesystemRule {
-                        path: path.clone(),
-                        read_only: true,
-                    });
+                    config.filesystem_rules.push(FilesystemRule { path: path.clone(), read_only: true });
                 }
                 for path in &profile.filesystem.read_write {
-                    config.filesystem_rules.push(FilesystemRule {
-                        path: path.clone(),
-                        read_only: false,
-                    });
+                    config.filesystem_rules.push(FilesystemRule { path: path.clone(), read_only: false });
                 }
                 config.seccomp_syscall_groups.extend(profile.seccomp.allow_groups);
                 config.seccomp_allow_syscalls.extend(profile.seccomp.allow_syscalls);
@@ -161,7 +123,6 @@ fn main() {
         None
     };
 
-    // Ajouter les règles --fs après le profil
     for rule_str in &cli.fs_rules {
         match parse_fs_rule(rule_str) {
             Some(rule) => config.filesystem_rules.push(rule),
@@ -172,7 +133,6 @@ fn main() {
         }
     }
 
-    // Log hash de la politique
     let policy_hash = TelemetryLogger::policy_hash(&config);
     if cli.verbose {
         eprintln!("[hajiz] hash politique: {}", policy_hash);
@@ -180,7 +140,6 @@ fn main() {
 
     let binary = PathBuf::from(&binary_str);
 
-    // Événement démarrage sandbox
     logger.log(&SecurityEvent::SandboxStarted {
         pid: std::process::id(),
         binary: binary_str.clone(),
